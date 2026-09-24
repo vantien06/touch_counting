@@ -1,4 +1,4 @@
-model: yolo26m.pt
+model: yolo26n.pt
 confidence: 0.25
 imgsz: native
 tracker: bytetrack.yaml

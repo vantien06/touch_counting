@@ -105,7 +105,7 @@ def get_detections(result):
     return detections
 
 
-def update_states(states, detections, regions, frame_index, seconds, dwell, grace, handoff_distance, writer):
+def update_states(states, detections, regions, frame_index, seconds, dwell, grace, handoff_distance, writer, touch_counts):
     matched = set()
     assignments = {}
     by_id = {d.track_id: d for d in detections if d.track_id is not None}
@@ -150,6 +150,7 @@ def update_states(states, detections, regions, frame_index, seconds, dwell, grac
                 state.status = COUNTING
                 state.entry_frame = frame_index
                 state.entry_seconds = seconds
+                touch_counts[region_name] = touch_counts.get(region_name, 0) + 1
 
         for detection in detections:
             if detection.track_id is None or id(detection) in matched:
@@ -166,7 +167,7 @@ def update_states(states, detections, regions, frame_index, seconds, dwell, grac
                 region_states.remove(state)
 
 
-def draw_frame(frame, detections, regions, states):
+def draw_frame(frame, detections, regions, states, touch_counts):
     zone_colors = {}
     for name, points in regions:
         region_states = states.get(name, [])
@@ -179,7 +180,9 @@ def draw_frame(frame, detections, regions, states):
         polygon = np.asarray(points, dtype=np.int32)
         cv2.polylines(frame, [polygon], True, zone_colors[name][0], 2)
         x, y = polygon[0]
-        cv2.putText(frame, f"{name}: {zone_colors[name][1]}", (int(x), max(20, int(y) - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, zone_colors[name][0], 2)
+        label_y = max(20, int(y) - 8)
+        cv2.putText(frame, f"{name}: {zone_colors[name][1]}", (int(x), label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, zone_colors[name][0], 2)
+        cv2.putText(frame, f"Touch: {touch_counts.get(name, 0)}", (int(x), label_y + 22), cv2.FONT_HERSHEY_SIMPLEX, 0.55, zone_colors[name][0], 2)
 
     for detection in detections:
         x1, y1, x2, y2 = detection.box
@@ -249,6 +252,7 @@ def main():
         writer.writeheader()
         video_writer = None
         states = {}
+        touch_counts = {name: 0 for name, _points in regions}
         frame_index = -1
         last_frame = None
         processing_started = time.perf_counter()
@@ -262,8 +266,8 @@ def main():
             seconds = frame_index / fps
             result = model.track(frame, persist=True, classes=[0], conf=confidence, imgsz=imgsz, tracker=tracker, verbose=False)[0]
             detections = get_detections(result)
-            update_states(states, detections, regions, frame_index, seconds, dwell, grace, handoff_distance, writer)
-            draw_frame(frame, detections, regions, states)
+            update_states(states, detections, regions, frame_index, seconds, dwell, grace, handoff_distance, writer, touch_counts)
+            draw_frame(frame, detections, regions, states, touch_counts)
             if args.save_video and video_writer is None:
                 fourcc = cv2.VideoWriter_fourcc(*"mp4v")
                 video_writer = cv2.VideoWriter(args.save_video, fourcc, fps, (width, height))
