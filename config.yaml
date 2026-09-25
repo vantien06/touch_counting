@@ -6,9 +6,23 @@ dwell_seconds: 5.0
 id_switch_grace_seconds: 1.0
 id_switch_distance_pixels: 120.0
 regions:
-  - name: region_A
-    points:
-      - [855, 254]
-      - [996, 254]
-      - [996, 421]
-      - [855, 421]
+- name: region_A
+  points:
+  - - 2082
+    - 619
+  - - 2421
+    - 619
+  - - 2421
+    - 1087
+  - - 2082
+    - 1087
+- name: region_B
+  points:
+  - - 1224
+    - 625
+  - - 1611
+    - 625
+  - - 1611
+    - 951
+  - - 1224
+    - 951

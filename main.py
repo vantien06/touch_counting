@@ -299,7 +299,8 @@ def main():
         capture.release()
         if csv_file is not None:
             csv_file.close()
-        cv2.destroyAllWindows()
+        if args.preview:
+            cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
