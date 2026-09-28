@@ -104,6 +104,13 @@ class TouchCountingApp:
         ttk.Button(camera_row, text="Refresh", command=self.refresh_cameras).pack(side="left", padx=(8, 0))
         self.camera_box.bind("<<ComboboxSelected>>", self.update_camera_preview)
 
+        name_row = ttk.Frame(camera_controls)
+        name_row.pack(fill="x", pady=(6, 0))
+        ttk.Label(name_row, text="Camera name", width=16).pack(side="left")
+        self.camera_name_var = tk.StringVar()
+        ttk.Entry(name_row, textvariable=self.camera_name_var).pack(side="left", fill="x", expand=True)
+        ttk.Button(name_row, text="Save name", command=self.save_camera_name).pack(side="left", padx=(8, 0))
+
         preview_frame = ttk.LabelFrame(camera_section, text="Camera preview", padding=4, width=172, height=110)
         preview_frame.pack(side="left", padx=(12, 0))
         preview_frame.pack_propagate(False)
@@ -153,7 +160,9 @@ class TouchCountingApp:
         self.cameras = find_cameras()
         for camera in self.cameras:
             self.ensure_camera_config(camera)
-        labels = [f"Camera {camera['index']} - {camera['name']} - {camera['width']}x{camera['height']}" for camera in self.cameras]
+        for camera in self.cameras:
+            camera["custom_name"] = self.read_camera_name(camera)
+        labels = [f"{camera['custom_name']} - {camera['width']}x{camera['height']} (index {camera['index']})" for camera in self.cameras]
         self.camera_box["values"] = labels
         if labels:
             self.camera_box.current(0)
@@ -232,6 +241,8 @@ class TouchCountingApp:
         try:
             with config_path.open("r", encoding="utf-8") as stream:
                 config = yaml.safe_load(stream) or {}
+            camera["custom_name"] = str(config.get("camera_name", camera["name"]))
+            self.camera_name_var.set(camera["custom_name"])
             model = str(config.get("model", MODEL_FILES.get(self.model_var.get(), "yolo26n.pt")))
             self.model_var.set(MODEL_NAMES.get(model, model))
             self.confidence_var.set(str(config.get("confidence", self.confidence_var.get())))
@@ -241,6 +252,15 @@ class TouchCountingApp:
             self.handoff_var.set(str(config.get("id_switch_distance_pixels", self.handoff_var.get())))
         except (OSError, yaml.YAMLError):
             return
+
+    def read_camera_name(self, camera):
+        config_path = self.camera_config_path(camera)
+        try:
+            with config_path.open("r", encoding="utf-8") as stream:
+                config = yaml.safe_load(stream) or {}
+            return str(config.get("camera_name", camera["name"]))
+        except (OSError, yaml.YAMLError):
+            return camera["name"]
 
     def ensure_camera_config(self, camera):
         CAMERA_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -256,6 +276,30 @@ class TouchCountingApp:
         with config_path.open("w", encoding="utf-8") as stream:
             yaml.safe_dump(config, stream, sort_keys=False)
         return config_path
+
+    def save_camera_name(self):
+        camera = self.selected_camera_info()
+        if camera is None:
+            return
+        camera_name = self.camera_name_var.get().strip()
+        if not camera_name:
+            messagebox.showwarning("Invalid camera name", "Please enter a camera name.")
+            return
+        try:
+            config_path = self.ensure_camera_config(camera)
+            with config_path.open("r", encoding="utf-8") as stream:
+                config = yaml.safe_load(stream) or {}
+            config["camera_name"] = camera_name
+            with config_path.open("w", encoding="utf-8") as stream:
+                yaml.safe_dump(config, stream, sort_keys=False)
+            camera["custom_name"] = camera_name
+            selection = self.camera_box.current()
+            labels = [f"{item.get('custom_name', item['name'])} - {item['width']}x{item['height']} (index {item['index']})" for item in self.cameras]
+            self.camera_box["values"] = labels
+            self.camera_box.current(selection)
+            self.status_var.set(f"Camera renamed to {camera_name}")
+        except (OSError, yaml.YAMLError):
+            messagebox.showerror("Could not save camera name", "The camera name could not be saved.")
 
     def add_setting_row(self, parent, row, label, variable, values=None, help_text=""):
         ttk.Label(parent, text=label, width=28).grid(row=row, column=0, sticky="w", padx=(0, 10), pady=3)

@@ -1,0 +1,38 @@
+model: yolo26m.pt
+confidence: 0.25
+imgsz: 640
+tracker: bytetrack.yaml
+dwell_seconds: 5.0
+id_switch_grace_seconds: 1.0
+id_switch_distance_pixels: 120.0
+regions:
+- name: region_A
+  points:
+  - - 176
+    - 96
+  - - 233
+    - 96
+  - - 233
+    - 184
+  - - 176
+    - 184
+- name: region_B
+  points:
+  - - 336
+    - 93
+  - - 431
+    - 93
+  - - 431
+    - 160
+  - - 336
+    - 160
+- name: region_C
+  points:
+  - - 104
+    - 262
+  - - 576
+    - 262
+  - - 576
+    - 392
+  - - 104
+    - 392

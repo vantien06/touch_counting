@@ -17,9 +17,19 @@ Chay lenh sau de mo giao dien dieu khien:
 python gui.py
 ```
 
+### Chay tren may khac khong can quyen admin
+
+Giai nen goi ZIP vao mot thu muc ma nguoi dung co quyen ghi. May dich can co Python va pip.
+
+1. Chay `INSTALL_REQUIREMENTS.bat` de cai cac thu vien vao tai khoan nguoi dung hien tai.
+2. Chay `RUN_GUI.bat` de mo giao dien.
+
+Khong can cai dat vao `Program Files` va khong can quyen administrator. Khong di chuyen rieng cac file `.pt`, `config.yaml`, `camera_configs` hoac `logo` ra khoi thu muc project.
+
 Trong giao dien:
 
 - Chon camera trong danh sach; bam `Lam moi` neu vua cam them camera.
+- Dat ten de nhan biet cho camera trong o `Camera name` (vi du `Nescafe`, `Milo`) va bam `Save name`; ten nay duoc luu lai theo dung thiet bi.
 - Chuong trinh se yeu cau camera mo o muc toi da `3840x2160`; danh sach hien do phan giai thuc te camera tra ve.
 - Bam `Ve / sua zone` de mo cua so ve zone cho camera dang chon.
 - Chinh cac tuy chon tracking truc tiep trong giao dien, sau do bam `Start tracking` cho camera dang chon hoac `Start all cameras` de chay dong thoi tat ca camera.

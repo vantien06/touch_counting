@@ -320,7 +320,9 @@ def main():
     confidence = float(config.get("confidence", 0.25))
     tracker = config.get("tracker", "bytetrack.yaml")
     writer = None
-    camera_name = f"Camera {args.camera}" if args.camera is not None else str(args.video)
+    camera_name = config.get("camera_name")
+    if not camera_name:
+        camera_name = f"Camera {args.camera}" if args.camera is not None else str(args.video)
     resolution = f"{width}x{height}"
     writer = EventLogger(args.output, camera_name, resolution)
     try:
