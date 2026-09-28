@@ -9,14 +9,47 @@ from pathlib import Path
 import cv2
 import numpy as np
 import yaml
+import portalocker
 from ultralytics import YOLO
 
 
-EMPTY = "EMPTY"
 WAITING = "WAITING"
 COUNTING = "COUNTING"
 CAMERA_WIDTH = 3840
 CAMERA_HEIGHT = 2160
+CSV_FIELDS = [
+    "camera",
+    "camera_resolution",
+    "recorded_at_utc",
+    "person_id",
+    "zone",
+    "entry_frame",
+    "exit_frame",
+    "entry_time_seconds",
+    "exit_time_seconds",
+    "time_in_zone_seconds",
+]
+
+
+class EventLogger:
+    def __init__(self, path, camera, resolution):
+        self.path = Path(path)
+        self.camera = camera
+        self.resolution = resolution
+
+    def writerow(self, event):
+        row = {
+            "camera": self.camera,
+            "camera_resolution": self.resolution,
+            **event,
+        }
+        with portalocker.Lock(str(self.path), mode="a+", timeout=30, newline="", encoding="utf-8") as csv_file:
+            csv_file.seek(0, 2)
+            writer = csv.DictWriter(csv_file, fieldnames=CSV_FIELDS)
+            if csv_file.tell() == 0:
+                writer.writeheader()
+            writer.writerow(row)
+            csv_file.flush()
 
 
 def parse_video_source(source):
@@ -97,16 +130,16 @@ def parse_regions(config):
 def close_visit(state, exit_frame, exit_seconds, writer):
     if state.status != COUNTING:
         return
-    duration = max(0.0, exit_seconds - float(state.entry_seconds))
+    duration = max(0.0, exit_seconds - float(state.first_seen_seconds))
     writer.writerow({
-        "logged_at_utc": datetime.now(timezone.utc).isoformat(),
-        "track_id": state.track_id,
-        "region": state.region,
-        "entry_frame": state.entry_frame,
+        "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+        "person_id": state.track_id,
+        "zone": state.region.replace("_", " ").title(),
+        "entry_frame": state.first_seen_frame,
         "exit_frame": exit_frame,
-        "entry_seconds": f"{state.entry_seconds:.3f}",
-        "exit_seconds": f"{exit_seconds:.3f}",
-        "duration_seconds": f"{duration:.3f}",
+        "entry_time_seconds": f"{state.first_seen_seconds:.3f}",
+        "exit_time_seconds": f"{exit_seconds:.3f}",
+        "time_in_zone_seconds": f"{duration:.3f}",
     })
 
 
@@ -195,24 +228,25 @@ def draw_frame(frame, detections, regions, states, touch_counts):
     for name, points in regions:
         region_states = states.get(name, [])
         if any(state.status == COUNTING for state in region_states):
-            zone_colors[name] = ((0, 180, 0), COUNTING)
+            zone_colors[name] = (0, 0, 255)
         elif any(state.status == WAITING for state in region_states):
-            zone_colors[name] = ((0, 215, 255), WAITING)
+            zone_colors[name] = (0, 215, 255)
         else:
-            zone_colors[name] = ((80, 0, 140), EMPTY)
+            zone_colors[name] = (0, 180, 0)
         polygon = np.asarray(points, dtype=np.int32)
-        cv2.polylines(frame, [polygon], True, zone_colors[name][0], 2)
+        cv2.polylines(frame, [polygon], True, zone_colors[name], 2)
         x, y = polygon[0]
         label_y = max(20, int(y) - 8)
-        cv2.putText(frame, f"{name}: {zone_colors[name][1]}", (int(x), label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, zone_colors[name][0], 2)
-        cv2.putText(frame, f"Touch: {touch_counts.get(name, 0)}", (int(x), label_y + 22), cv2.FONT_HERSHEY_SIMPLEX, 0.55, zone_colors[name][0], 2)
+        region_label = name.replace("_", " ").title()
+        cv2.putText(frame, region_label, (int(x), label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, zone_colors[name], 2)
+        cv2.putText(frame, f"Count: {touch_counts.get(name, 0)}", (int(x), label_y + 22), cv2.FONT_HERSHEY_SIMPLEX, 0.55, zone_colors[name], 2)
 
     for detection in detections:
         x1, y1, x2, y2 = detection.box
         color = (0, 165, 255) if detection.track_id is not None else (0, 0, 255)
-        label = f"ID {detection.track_id} {detection.confidence:.2f}" if detection.track_id is not None else f"no-id {detection.confidence:.2f}"
+        label = f"Person {detection.confidence:.2f}"
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-        cv2.circle(frame, detection.center, 5, (255, 0, 180), -1)
+        cv2.circle(frame, detection.center, 8, (255, 0, 180), -1)
         cv2.putText(frame, label, (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
 
 
@@ -286,17 +320,14 @@ def main():
     confidence = float(config.get("confidence", 0.25))
     tracker = config.get("tracker", "bytetrack.yaml")
     writer = None
-    csv_file = None
-    fieldnames = ["logged_at_utc", "track_id", "region", "entry_frame", "exit_frame", "entry_seconds", "exit_seconds", "duration_seconds"]
+    camera_name = f"Camera {args.camera}" if args.camera is not None else str(args.video)
+    resolution = f"{width}x{height}"
+    writer = EventLogger(args.output, camera_name, resolution)
     try:
-        csv_file = Path(args.output).open("w", newline="", encoding="utf-8")
-        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-        writer.writeheader()
         video_writer = None
         states = {}
         touch_counts = {name: 0 for name, _points in regions}
         frame_index = -1
-        last_frame = None
         processing_started = time.perf_counter()
         while True:
             ok, frame = capture.read()
@@ -305,7 +336,7 @@ def main():
             frame_index += 1
             if args.max_frames and frame_index >= args.max_frames:
                 break
-            seconds = frame_index / fps
+            seconds = time.perf_counter() - processing_started
             result = model.track(frame, persist=True, classes=[0], conf=confidence, imgsz=imgsz, tracker=tracker, verbose=False)[0]
             detections = get_detections(result)
             update_states(states, detections, regions, frame_index, seconds, dwell, grace, handoff_distance, writer, touch_counts)
@@ -317,7 +348,6 @@ def main():
                     raise SystemExit(f"Cannot open output video: {args.save_video}")
             if video_writer is not None:
                 video_writer.write(frame)
-            last_frame = frame
             processed_frames = frame_index + 1
             if processed_frames == 1 or processed_frames % 10 == 0 or (target_frames and processed_frames == target_frames):
                 elapsed = time.perf_counter() - processing_started
@@ -330,7 +360,7 @@ def main():
                 if cv2.waitKey(1) & 0xFF in (ord("q"), 27):
                     break
         final_frame = max(frame_index, 0)
-        final_seconds = final_frame / fps
+        final_seconds = time.perf_counter() - processing_started
         for region_states in states.values():
             for state in region_states:
                 if state.status == COUNTING:
@@ -339,8 +369,6 @@ def main():
             video_writer.release()
     finally:
         capture.release()
-        if csv_file is not None:
-            csv_file.close()
         if args.preview:
             cv2.destroyAllWindows()
 

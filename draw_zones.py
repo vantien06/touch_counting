@@ -38,6 +38,15 @@ def load_config(path):
     return {}
 
 
+def read_warm_frame(capture, attempts=10):
+    frame = None
+    for _ in range(attempts):
+        ok, candidate = capture.read()
+        if ok and candidate is not None:
+            frame = candidate
+    return frame
+
+
 def main():
     parser = argparse.ArgumentParser(description="Draw rectangular monitoring zones")
     source_group = parser.add_mutually_exclusive_group()
@@ -66,14 +75,21 @@ def main():
         capture = cv2.VideoCapture(source)
     if not capture.isOpened():
         raise SystemExit(f"Cannot open video/camera: {args.video}")
-    ok, frame = capture.read()
-    capture.release()
-    if not ok or frame is None:
+    frame = read_warm_frame(capture)
+    if frame is None:
+        capture.release()
         raise SystemExit("Cannot read the first frame")
 
     config_path = Path(args.config)
     config = load_config(config_path)
-    zones = []
+    zones = [
+        {
+            "name": str(zone.get("name", f"region_{index + 1}")),
+            "points": zone.get("points", []),
+        }
+        for index, zone in enumerate(config.get("regions", []))
+        if isinstance(zone, dict) and len(zone.get("points", [])) >= 3
+    ]
     drawing = False
     start = None
     current = None
@@ -105,6 +121,9 @@ def main():
     cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
     cv2.setMouseCallback(WINDOW, mouse)
     while True:
+        ok, frame = capture.read()
+        if not ok or frame is None:
+            break
         display = frame.copy()
         for zone in zones:
             points = zone["points"]
@@ -125,6 +144,7 @@ def main():
             break
         elif key == ord("q") or key == 27:
             break
+    capture.release()
     cv2.destroyAllWindows()
 
 

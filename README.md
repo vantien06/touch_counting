@@ -22,7 +22,9 @@ Trong giao dien:
 - Chon camera trong danh sach; bam `Lam moi` neu vua cam them camera.
 - Chuong trinh se yeu cau camera mo o muc toi da `3840x2160`; danh sach hien do phan giai thuc te camera tra ve.
 - Bam `Ve / sua zone` de mo cua so ve zone cho camera dang chon.
-- Chon file config va CSV neu can, sau do bam `Bat dau tracking`.
+- Chinh cac tuy chon tracking truc tiep trong giao dien, sau do bam `Start tracking` cho camera dang chon hoac `Start all cameras` de chay dong thoi tat ca camera.
+- Moi camera tu dong dung mot file config rieng trong `camera_configs/`, duoc gan theo ID thiet bi thay vi chi theo index. Neu Windows doi camera 0 thanh camera 1, zone van di theo dung camera.
+- Nhieu camera co the ghi chung vao mot file CSV; moi dong co ten camera va do phan giai.
 - Bam `Dung` de ket thuc tracking.
 
 ## 4. Cai dat moi truong
@@ -206,16 +208,18 @@ Neu URL co ky tu dac biet, dat toan bo URL trong dau ngoac kep.
 
 ## 11. CSV output
 
-Moi visit hoan chinh co cac cot:
+Moi visit hoan chinh co cac cot ro rang:
 
-- `logged_at_utc`
-- `track_id`
-- `region`
+- `camera`: camera da ghi nhan visit, vi du `Camera 0`.
+- `camera_resolution`: do phan giai frame cua camera, vi du `3840x2160`.
+- `recorded_at_utc`: thoi diem ghi nhan theo UTC.
+- `person_id`: ID tam thoi cua nguoi do tracker cap.
+- `zone`: ten zone, vi du `Region A`.
 - `entry_frame`
 - `exit_frame`
-- `entry_seconds`
-- `exit_seconds`
-- `duration_seconds`
+- `entry_time_seconds`: thoi gian tu luc bat dau tracking den khi vao zone.
+- `exit_time_seconds`: thoi gian tu luc bat dau tracking den khi roi zone.
+- `time_in_zone_seconds`: tong thoi gian o trong zone.
 
 Nguoi roi zone truoc khi du `dwell_seconds` se khong duoc ghi log. Neu dang active khi video ket thuc, visit se duoc dong tai frame cuoi.
 
