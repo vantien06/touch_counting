@@ -6,6 +6,29 @@ import yaml
 
 
 WINDOW = "Draw zones - drag, s=save, u=undo, q=quit"
+CAMERA_WIDTH = 3840
+CAMERA_HEIGHT = 2160
+
+
+def parse_video_source(source):
+    source = str(source)
+    if source.isdigit():
+        return int(source)
+    return source
+
+
+def list_cameras(max_index=10):
+    cameras = []
+    for index in range(max_index):
+        capture = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+        try:
+            if capture.isOpened():
+                ok, frame = capture.read()
+                if ok and frame is not None:
+                    cameras.append((index, frame.shape[1], frame.shape[0]))
+        finally:
+            capture.release()
+    return cameras
 
 
 def load_config(path):
@@ -17,11 +40,30 @@ def load_config(path):
 
 def main():
     parser = argparse.ArgumentParser(description="Draw rectangular monitoring zones")
-    parser.add_argument("--video", required=True, help="Video path or camera URL")
+    source_group = parser.add_mutually_exclusive_group()
+    source_group.add_argument("--video", help="Video path or camera URL")
+    source_group.add_argument("--camera", type=int, help="Camera index; use --list-cameras to see available cameras")
+    source_group.add_argument("--list-cameras", action="store_true", help="List connected cameras and exit")
     parser.add_argument("--config", default="config.yaml")
     args = parser.parse_args()
+    if args.list_cameras:
+        cameras = list_cameras()
+        if cameras:
+            for index, width, height in cameras:
+                print(f"Camera {index}: {width}x{height}")
+        else:
+            print("No camera found")
+        return
+    if args.video is None and args.camera is None:
+        parser.error("one of --video or --camera is required (or use --list-cameras)")
 
-    capture = cv2.VideoCapture(args.video)
+    source = args.camera if args.camera is not None else parse_video_source(args.video)
+    if isinstance(source, int):
+        capture = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+        capture.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
+        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
+    else:
+        capture = cv2.VideoCapture(source)
     if not capture.isOpened():
         raise SystemExit(f"Cannot open video/camera: {args.video}")
     ok, frame = capture.read()

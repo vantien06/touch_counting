@@ -1,0 +1,278 @@
+nhớ chạy conda activate touchCounting trước nhé
+
+XAY DUNG LAI DU AN TOUCH COUNTING
+
+## 1. Muc tieu
+
+Hãy xây dựng một ứng dụng computer vision trên Windows dùng Python, OpenCV và Ultralytics YOLO để:
+
+- Nhận diện và tracking người trong camera.
+- Xác định tâm bounding box của từng người.
+- Kiểm tra tâm bounding box có nằm trong các vùng giám sát (zone) hay không.
+- Đếm một visit/touch khi người ở trong zone liên tục đủ thời gian dwell.
+- Ghi các visit hoàn chỉnh ra file CSV.
+- Hiển thị preview trực tiếp có bounding box, track ID, zone và trạng thái.
+
+Nguồn chính phải là camera đã cắm vào laptop, không bắt người dùng phải nhập đường dẫn MP4. Có thể giữ hỗ trợ MP4 và RTSP để tương thích hoặc test, nhưng trải nghiệm mặc định phải là camera.
+
+## 2. Cách khởi động bắt buộc
+
+Người dùng chỉ cần chạy một lệnh:
+
+```powershell
+python gui.py
+```
+
+Sau đó mọi thao tác chính được thực hiện trong GUI, không cần nhớ nhiều lệnh terminal.
+
+## 3. GUI bắt buộc có
+
+Tạo một giao diện desktop bằng Tkinter hoặc thư viện GUI nhẹ có sẵn trên Windows. GUI cần có:
+
+- Danh sách tất cả camera đang kết nối.
+- Hiển thị camera index và độ phân giải thực tế, ví dụ: `Camera 0 - 1920x1080`.
+- Nút `Refresh` để dò lại camera sau khi người dùng cắm/tháo camera.
+- Combobox để chọn camera.
+- Ô chọn đường dẫn `config.yaml`.
+- Ô chọn đường dẫn file CSV output, mặc định là `events.csv`.
+- Checkbox bật/tắt cửa sổ preview.
+- Nút `Ve / sua zone` để mở công cụ vẽ zone cho camera đang chọn.
+- Nút `Bat dau tracking` để chạy nhận diện.
+- Nút `Dung` để dừng tracking.
+- Nhãn trạng thái: đang dò camera, đang tracking, đã dừng, lỗi mở camera...
+- Không làm treo GUI khi tracking đang chạy. Có thể chạy tracking bằng subprocess hoặc thread phù hợp.
+- Khi đóng GUI phải giải phóng process, camera và cửa sổ OpenCV.
+- Nếu không tìm thấy camera, phải hiển thị thông báo rõ ràng.
+
+## 4. Chọn nhiều camera
+
+Phải hỗ trợ nhiều camera:
+
+- Dò các camera index từ `0` đến ít nhất `9`.
+- Với mỗi index, mở thử camera, đọc thử một frame, lấy kích thước thực tế, rồi release camera.
+- Chỉ đưa camera đọc được frame vào danh sách.
+- Khi người dùng chọn camera index `N`, tracking và vẽ zone phải dùng đúng camera đó.
+- Trên Windows nên ưu tiên backend `cv2.CAP_DSHOW` cho camera index.
+- Không giữ camera mở trong lúc chỉ đang dò danh sách.
+
+Có thể giữ các lệnh CLI tương thích:
+
+```powershell
+python main.py --list-cameras
+python main.py --camera 1 --config config.yaml --output events.csv --preview
+python draw_zones.py --camera 1 --config config.yaml
+```
+
+Nhưng GUI một lệnh là luồng sử dụng chính.
+
+## 5. Độ phân giải camera
+
+Không được dùng mặc định độ phân giải thấp như `640x480` nếu camera hỗ trợ độ phân giải cao hơn.
+
+- Khi mở camera, yêu cầu mode cao nhất hợp lý, tối thiểu thử `3840x2160`.
+- Nếu camera không hỗ trợ, phải chấp nhận độ phân giải cao nhất mà driver trả về.
+- Có thể thử lần lượt các mode: `3840x2160`, `2560x1440`, `1920x1080`, `1280x720`, `640x480`, rồi chọn mode đọc được có diện tích lớn nhất.
+- Sau khi mở, phải đọc lại `CAP_PROP_FRAME_WIDTH` và `CAP_PROP_FRAME_HEIGHT` hoặc dùng kích thước frame thực tế để báo cho người dùng.
+- Cùng logic độ phân giải phải được dùng trong dò camera, tracking và vẽ zone.
+- Không scale frame xuống trước khi tính zone hoặc ghi video. YOLO có thể dùng `imgsz` riêng trong inference.
+- Nếu độ phân giải thực tế vẫn thấp, báo rõ đó là giới hạn camera/driver hoặc camera đang bị ứng dụng khác giữ ở mode thấp.
+
+## 6. Công cụ vẽ zone
+
+Tạo `draw_zones.py` hoặc tích hợp trong GUI, nhưng phải có chức năng:
+
+- Mở frame đầu tiên của camera đã chọn.
+- Hiển thị cửa sổ OpenCV.
+- Kéo chuột trái để vẽ hình chữ nhật.
+- Mỗi vùng có tên tự động: `region_A`, `region_B`, `region_C`...
+- Phím `u` xóa zone gần nhất.
+- Phím `s` lưu zone vào `config.yaml` rồi thoát.
+- Phím `q` hoặc `Esc` thoát không lưu.
+- Zone lưu dạng danh sách điểm:
+
+```yaml
+regions:
+  - name: region_A
+    points:
+      - [x1, y1]
+      - [x2, y1]
+      - [x2, y2]
+      - [x1, y2]
+```
+
+- Tọa độ zone phải khớp với độ phân giải frame camera được sử dụng khi tracking.
+
+## 7. YOLO tracking
+
+Dùng Ultralytics YOLO và tracker, mặc định có thể dùng `bytetrack.yaml`.
+
+- Chỉ tracking class người (`classes=[0]`).
+- Có confidence threshold cấu hình được, mặc định `0.25`.
+- Dùng `model.track(..., persist=True, tracker="bytetrack.yaml")` hoặc API tương đương.
+- Hỗ trợ model như `yolo26n.pt`, `yolo26s.pt`, `yolo26m.pt`; model được cấu hình trong YAML.
+- Preview phải vẽ bounding box, center và track ID.
+- Người có track ID được vẽ một màu; detection chưa có ID dùng màu khác.
+- Hiển thị confidence và track ID trên frame.
+
+## 8. Quy tắc dwell và visit
+
+Với mỗi người và mỗi zone:
+
+- Tính tâm bounding box:
+
+```text
+center_x = (x1 + x2) / 2
+center_y = (y1 + y2) / 2
+```
+
+- Dùng tâm bounding box để kiểm tra nằm trong zone; không dùng điểm đáy bounding box.
+- Khi tâm đi vào zone, bắt đầu timer.
+- Nếu ở liên tục đủ `dwell_seconds` thì tạo một visit hợp lệ.
+- Nếu rời zone trước thời gian dwell thì không ghi visit.
+- Khi visit hợp lệ rời zone, đóng visit và ghi CSV.
+- Nếu video/camera dừng trong lúc visit đang active, đóng visit tại frame cuối.
+- Zone phải hiển thị trạng thái/count trên preview.
+
+Các cấu hình mặc định:
+
+```yaml
+model: yolo26n.pt
+confidence: 0.25
+imgsz: native
+tracker: bytetrack.yaml
+dwell_seconds: 5.0
+id_switch_grace_seconds: 1.0
+id_switch_distance_pixels: 120.0
+regions: []
+```
+
+## 9. Xử lý mất hoặc đổi tracking ID
+
+Tracking ID có thể bị mất hoặc thay đổi. Không được reset visit ngay lập tức:
+
+- Giữ trạng thái trong `id_switch_grace_seconds`, mặc định `1.0` giây.
+- Nếu ID mới xuất hiện gần tâm cũ trong khoảng `id_switch_distance_pixels`, mặc định `120` pixel, chuyển trạng thái sang ID mới.
+- Không reset dwell timer khi đổi ID hợp lệ.
+- Nếu không tìm thấy người phù hợp sau thời gian grace thì đóng/hủy trạng thái theo đúng quy tắc dwell.
+
+## 10. Preview
+
+Preview phải có:
+
+- Frame camera thời gian thực.
+- Các zone được vẽ bằng polygon.
+- Tên zone.
+- Số touch/visit của từng zone.
+- Trạng thái zone đang chờ dwell hoặc đã có visit.
+- Bounding box người.
+- Tâm bounding box.
+- Track ID và confidence.
+- Nhấn `q` hoặc `Esc` để dừng preview/tracking.
+- Khi model đang load, hiển thị thông báo `Loading model...` nếu có thể.
+
+## 11. CSV output
+
+Ghi header và mỗi visit hoàn chỉnh có các cột:
+
+```text
+logged_at_utc
+track_id
+region
+entry_frame
+exit_frame
+entry_seconds
+exit_seconds
+duration_seconds
+```
+
+Yêu cầu:
+
+- Ghi CSV bằng UTF-8.
+- Ghi ngay khi visit được đóng.
+- Visit chưa đủ dwell không được ghi.
+- Visit đang active khi dừng chương trình phải được đóng tại frame cuối nếu đã đạt điều kiện.
+
+## 12. Tùy chọn CLI tương thích
+
+Duy trì các tùy chọn sau ngoài GUI:
+
+```text
+--video PATH_OR_URL       MP4 hoặc URL RTSP/HTTP
+--camera INDEX             camera index, ví dụ 0 hoặc 1
+--list-cameras             liệt kê camera rồi thoát
+--config PATH              mặc định config.yaml
+--output PATH              mặc định events.csv
+--preview                  mở preview
+--save-video PATH          tùy chọn ghi video đã vẽ overlay
+--max-frames N             giới hạn frame để test; 0 là không giới hạn
+```
+
+`--video` và `--camera` loại trừ nhau. `--list-cameras` không cần nguồn khác.
+
+## 13. Lưu video xử lý tùy chọn
+
+Nếu có `--save-video`:
+
+- Ghi frame đã vẽ overlay ra video.
+- Giữ width, height và FPS thực tế của nguồn.
+- Trên Windows có thể dùng codec `mp4v`.
+- Nếu không truyền `--save-video`, không tự động tạo MP4.
+
+## 14. File và dependency mong muốn
+
+Cấu trúc tối thiểu:
+
+```text
+project/
+  gui.py
+  main.py
+  draw_zones.py
+  config.yaml
+  requirements.txt
+  README.md
+  prompt.txt
+  yolo26n.pt hoặc model tương đương
+```
+
+`requirements.txt` tối thiểu:
+
+```text
+ultralytics>=8.3.0
+opencv-python>=4.8.0
+PyYAML>=6.0
+lap>=0.5.12
+```
+
+Tkinter thường có sẵn trong Python Windows; nếu dùng thư viện GUI khác thì phải cập nhật requirements.
+
+## 15. README bắt buộc
+
+README phải hướng dẫn:
+
+1. Tạo/activate environment Python.
+2. Cài requirements.
+3. Chạy duy nhất `python gui.py`.
+4. Chọn camera trong GUI.
+5. Làm mới danh sách camera.
+6. Vẽ và lưu zone.
+7. Bắt đầu/dừng tracking.
+8. Đọc file CSV.
+9. Dùng CLI để test camera, MP4 và RTSP.
+10. Xử lý lỗi không thấy camera, preview không hiện, độ phân giải thấp, model chạy chậm và thiếu dependency.
+
+## 16. Tiêu chí nghiệm thu
+
+- Chạy `python gui.py` mở được GUI.
+- GUI dò được nhiều camera và cho chọn camera index.
+- GUI hiển thị đúng độ phân giải thực tế của từng camera.
+- Camera được yêu cầu mở ở độ phân giải cao nhất có thể.
+- Có thể vẽ zone bằng chuột và lưu vào YAML.
+- Có thể bắt đầu tracking từ GUI mà không cần nhập thêm lệnh.
+- Có thể dừng tracking từ GUI.
+- Preview hiển thị người, ID, center, zone và trạng thái dwell.
+- Visit đủ dwell được ghi đúng vào CSV.
+- Visit chưa đủ dwell không được ghi.
+- Mất ID tạm thời không reset dwell timer nếu tìm được ID thay thế phù hợp.
+- MP4/RTSP vẫn có thể dùng qua CLI nếu giữ compatibility.
+- `python -m py_compile gui.py main.py draw_zones.py` không báo lỗi.
+- Không để camera hoặc process chạy ngầm sau khi đóng ứng dụng.

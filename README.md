@@ -9,7 +9,23 @@ He thong computer vision dung Ultralytics YOLO de tracking nguoi trong video/cam
 - `config.yaml`: model, tracker, dwell time va danh sach zone.
 - `requirements.txt`: cac package Python can thiet.
 
-## 2. Cai dat moi truong
+## 3. Mo bang mot lenh
+
+Chay lenh sau de mo giao dien dieu khien:
+
+```powershell
+python gui.py
+```
+
+Trong giao dien:
+
+- Chon camera trong danh sach; bam `Lam moi` neu vua cam them camera.
+- Chuong trinh se yeu cau camera mo o muc toi da `3840x2160`; danh sach hien do phan giai thuc te camera tra ve.
+- Bam `Ve / sua zone` de mo cua so ve zone cho camera dang chon.
+- Chon file config va CSV neu can, sau do bam `Bat dau tracking`.
+- Bam `Dung` de ket thuc tracking.
+
+## 4. Cai dat moi truong
 
 Mo PowerShell tai thu muc project:
 
@@ -28,12 +44,30 @@ pip install -r requirements.txt
 
 Model YOLO se duoc Ultralytics tu dong tai ve khi chay lan dau. Co the chon `yolo26n.pt`, `yolo26s.pt` hoac `yolo26m.pt` trong `config.yaml`.
 
-## 3. Ve zone
+## 5. Ve zone
 
 Chay:
 
 ```powershell
 python draw_zones.py --video demo.mp4 --config config.yaml
+```
+
+Neu dung camera laptop, thuong dung camera index `0`:
+
+```powershell
+python draw_zones.py --video 0 --config config.yaml
+```
+
+Neu co nhieu camera, liet ke camera dang ket noi:
+
+```powershell
+python draw_zones.py --list-cameras
+```
+
+Sau do chon camera bang index, vi du camera `1`:
+
+```powershell
+python draw_zones.py --camera 1 --config config.yaml
 ```
 
 Dieu khien cua so OpenCV:
@@ -45,7 +79,7 @@ Dieu khien cua so OpenCV:
 
 Zone duoc luu duoi dang danh sach `points`, nen sau nay co the mo rong thanh polygon.
 
-## 4. Cau hinh
+## 6. Cau hinh
 
 Vi du:
 
@@ -78,7 +112,7 @@ Y nghia cac tuy chon:
 
 Voi video `1920x1080`, `imgsz: native` tuong duong `imgsz=1920`, cho ket qua chi tiet hon nhung cham va ton VRAM/RAM hon. Khi test tren CPU, nen dung `1280` hoac `640`.
 
-## 5. Chay video va CSV
+## 7. Chay video va CSV
 
 Chay toan bo video, ghi visit vao `events.csv`:
 
@@ -94,9 +128,29 @@ python main.py --video demo.mp4 --config config.yaml --output events.csv --max-f
 
 `--max-frames 0` hoac khong truyen tuy chon nay se xu ly den het video.
 
+De dung camera laptop, truyen camera index thay cho ten video. Camera dau tien thuong la `0`, camera tiep theo la `1`:
+
+```powershell
+python main.py --video 0 --config config.yaml --output events.csv --preview
+```
+
+Voi nhieu camera, liet ke truoc:
+
+```powershell
+python main.py --list-cameras
+```
+
+Ket qua se hien index va kich thuoc, vi du `Camera 1: 1920x1080`. Dung index do de chon camera:
+
+```powershell
+python main.py --camera 1 --config config.yaml --output events.csv --preview
+```
+
+Camera se chay lien tuc cho den khi nhan `q`/`Esc` trong cua so preview. Co the dung `--max-frames` de gioi han so frame khi test.
+
 Trong luc chay, chuong trinh in so frame da xu ly, FPS xu ly va ETA.
 
-## 6. Preview
+## 8. Preview
 
 Mo cua so preview:
 
@@ -124,7 +178,7 @@ center_y = (y1 + y2) / 2
 
 Khong dung diem day bounding box, phu hop voi camera goc xeo.
 
-## 7. Xuat video da xu ly
+## 9. Xuat video da xu ly
 
 Phai truyen tuy chon `--save-video`; neu khong, chuong trinh chi ghi CSV va khong tao MP4:
 
@@ -140,7 +194,7 @@ python main.py --video demo.mp4 --config config.yaml --output events.csv --previ
 
 Video output giu kich thuoc va FPS cua video goc. Codec `mp4v` duoc dung de tuong thich voi OpenCV tren Windows.
 
-## 8. Camera RTSP
+## 10. Camera RTSP
 
 Thay gia tri `--video` bang URL RTSP:
 
@@ -150,7 +204,7 @@ python main.py --video "rtsp://user:password@192.168.1.10:554/stream" --config c
 
 Neu URL co ky tu dac biet, dat toan bo URL trong dau ngoac kep.
 
-## 9. CSV output
+## 11. CSV output
 
 Moi visit hoan chinh co cac cot:
 
@@ -165,11 +219,11 @@ Moi visit hoan chinh co cac cot:
 
 Nguoi roi zone truoc khi du `dwell_seconds` se khong duoc ghi log. Neu dang active khi video ket thuc, visit se duoc dong tai frame cuoi.
 
-## 10. Xu ly mat ID
+## 12. Xu ly mat ID
 
 Trang thai visit khong phu thuoc hoan toan vao ID hien tai. Neu ID bi mat tam thoi, chuong trinh giu visit trong `id_switch_grace_seconds`. Khi ID moi xuat hien gan tam cu trong `id_switch_distance_pixels`, visit se duoc chuyen sang ID moi va khong reset dwell timer.
 
-## 11. Xu ly loi thuong gap
+## 13. Xu ly loi thuong gap
 
 ### Chay qua cham
 
