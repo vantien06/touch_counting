@@ -130,7 +130,7 @@ class TouchCountingApp:
         output_row = ttk.Frame(main)
         output_row.pack(fill="x", pady=(8, 5))
         ttk.Label(output_row, text="Output CSV", width=16).pack(side="left")
-        self.output_var = tk.StringVar(value=str(PROJECT_DIR / "events.csv"))
+        self.output_var = tk.StringVar(value=str(Path.home() / "Desktop" / "events.csv"))
         ttk.Entry(output_row, textvariable=self.output_var).pack(side="left", fill="x", expand=True)
         ttk.Button(output_row, text="Browse", command=self.choose_output).pack(side="left", padx=(8, 0))
 
@@ -333,6 +333,7 @@ class TouchCountingApp:
             with config_path.open("r", encoding="utf-8") as stream:
                 config = yaml.safe_load(stream) or {}
             config.update({
+                "camera_name": self.camera_name_var.get().strip(),
                 "model": MODEL_FILES.get(self.model_var.get(), self.model_var.get()),
                 "confidence": confidence,
                 "imgsz": imgsz,

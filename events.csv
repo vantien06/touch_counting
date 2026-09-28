@@ -1,3 +1,0 @@
-camera,camera_resolution,recorded_at_utc,person_id,zone,entry_frame,exit_frame,entry_time_seconds,exit_time_seconds,time_in_zone_seconds
-Camera 1,1920x1080,2026-09-28T05:01:28.969471+00:00,3,Region A,88,122,7.276,9.284,2.008
-Camera 1,1920x1080,2026-09-28T05:01:42.149912+00:00,3,Region A,303,323,20.191,21.436,1.245

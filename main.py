@@ -21,7 +21,6 @@ CSV_FIELDS = [
     "camera",
     "camera_resolution",
     "recorded_at_utc",
-    "person_id",
     "zone",
     "entry_frame",
     "exit_frame",
@@ -44,6 +43,19 @@ class EventLogger:
             **event,
         }
         with portalocker.Lock(str(self.path), mode="a+", timeout=30, newline="", encoding="utf-8") as csv_file:
+            csv_file.seek(0)
+            existing_rows = []
+            reader = csv.DictReader(csv_file)
+            if reader.fieldnames and reader.fieldnames != CSV_FIELDS:
+                existing_rows = [
+                    {field: old_row.get(field, "") for field in CSV_FIELDS}
+                    for old_row in reader
+                ]
+                csv_file.seek(0)
+                csv_file.truncate()
+                writer = csv.DictWriter(csv_file, fieldnames=CSV_FIELDS)
+                writer.writeheader()
+                writer.writerows(existing_rows)
             csv_file.seek(0, 2)
             writer = csv.DictWriter(csv_file, fieldnames=CSV_FIELDS)
             if csv_file.tell() == 0:
@@ -133,7 +145,6 @@ def close_visit(state, exit_frame, exit_seconds, writer):
     duration = max(0.0, exit_seconds - float(state.first_seen_seconds))
     writer.writerow({
         "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
-        "person_id": state.track_id,
         "zone": state.region.replace("_", " ").title(),
         "entry_frame": state.first_seen_frame,
         "exit_frame": exit_frame,
