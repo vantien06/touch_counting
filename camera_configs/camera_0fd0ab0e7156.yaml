@@ -1,4 +1,4 @@
-model: yolo26m.pt
+model: yolo26n.pt
 confidence: 0.25
 imgsz: 640
 tracker: bytetrack.yaml
@@ -8,32 +8,42 @@ id_switch_distance_pixels: 120.0
 regions:
 - name: region_A
   points:
-  - - 401
-    - 295
-  - - 624
-    - 295
-  - - 624
-    - 546
-  - - 401
-    - 546
+  - - 64
+    - 501
+  - - 271
+    - 501
+  - - 271
+    - 899
+  - - 64
+    - 899
 - name: region_B
   points:
-  - - 1116
-    - 325
-  - - 1516
-    - 325
-  - - 1516
-    - 556
-  - - 1116
-    - 556
+  - - 624
+    - 577
+  - - 772
+    - 577
+  - - 772
+    - 693
+  - - 624
+    - 693
 - name: region_C
   points:
-  - - 784
-    - 156
-  - - 1018
-    - 156
-  - - 1018
-    - 317
-  - - 784
-    - 317
+  - - 1622
+    - 642
+  - - 1784
+    - 642
+  - - 1784
+    - 844
+  - - 1622
+    - 844
+- name: region_D
+  points:
+  - - 1338
+    - 387
+  - - 1482
+    - 387
+  - - 1482
+    - 560
+  - - 1338
+    - 560
 camera_name: Camera Laptop
