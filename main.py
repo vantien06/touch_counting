@@ -27,6 +27,7 @@ CSV_FIELDS = [
     "entry_time_seconds",
     "exit_time_seconds",
     "time_in_zone_seconds",
+    "touch_count",
 ]
 
 
@@ -135,22 +136,28 @@ def parse_regions(config):
         points = item.get("points", [])
         if len(points) < 3:
             raise ValueError(f"Region {item.get('name')} needs at least 3 points")
-        regions.append((str(item["name"]), points))
+        offset = float(item.get("offset", 1.0))
+        if offset < 0:
+            raise ValueError(f"Region {item.get('name')} has an invalid offset")
+        regions.append((str(item["name"]), points, offset))
     return regions
 
 
-def close_visit(state, exit_frame, exit_seconds, writer):
+def close_visit(state, exit_frame, exit_seconds, writer, region_offset, touch_counts):
     if state.status != COUNTING:
         return
     duration = max(0.0, exit_seconds - float(state.first_seen_seconds))
+    touch_count = duration / 60.0 * region_offset
+    touch_counts[state.region] = touch_counts.get(state.region, 0.0) + touch_count
     writer.writerow({
         "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
-        "zone": state.region.replace("_", " ").title(),
+        "zone": state.region,
         "entry_frame": state.first_seen_frame,
         "exit_frame": exit_frame,
         "entry_time_seconds": f"{state.first_seen_seconds:.3f}",
         "exit_time_seconds": f"{exit_seconds:.3f}",
         "time_in_zone_seconds": f"{duration:.3f}",
+        "touch_count": f"{touch_count:.3f}",
     })
 
 
@@ -176,8 +183,9 @@ def update_states(states, detections, regions, frame_index, seconds, dwell, grac
     matched = set()
     assignments = {}
     by_id = {d.track_id: d for d in detections if d.track_id is not None}
+    region_points = {name: points for name, points, _offset in regions}
 
-    for region_name, _points in regions:
+    for region_name, _points, region_offset in regions:
         region_states = states.setdefault(region_name, [])
         for state in region_states:
             detection = by_id.get(state.track_id)
@@ -207,7 +215,7 @@ def update_states(states, detections, regions, frame_index, seconds, dwell, grac
             detection = assignments.get(id(state))
             if detection is None:
                 if state.status == COUNTING and seconds - state.last_seen_seconds > grace:
-                    close_visit(state, state.last_seen_frame, state.last_seen_seconds, writer)
+                    close_visit(state, state.last_seen_frame, state.last_seen_seconds, writer, region_offset, touch_counts)
                     region_states.remove(state)
                 continue
             state.last_seen_frame = frame_index
@@ -217,26 +225,25 @@ def update_states(states, detections, regions, frame_index, seconds, dwell, grac
                 state.status = COUNTING
                 state.entry_frame = frame_index
                 state.entry_seconds = seconds
-                touch_counts[region_name] = touch_counts.get(region_name, 0) + 1
 
         for detection in detections:
             if detection.track_id is None or id(detection) in matched:
                 continue
-            if point_in_region(detection.center, dict(regions)[region_name]):
+            if point_in_region(detection.center, region_points[region_name]):
                 region_states.append(VisitState(region_name, detection.track_id, frame_index, seconds, frame_index, seconds, detection.center))
                 matched.add(id(detection))
 
         # A tracked person whose center left the zone closes that visit immediately.
         for state in list(region_states):
             detection = assignments.get(id(state))
-            if detection is not None and not point_in_region(detection.center, dict(regions)[region_name]):
-                close_visit(state, frame_index, seconds, writer)
+            if detection is not None and not point_in_region(detection.center, region_points[region_name]):
+                close_visit(state, frame_index, seconds, writer, region_offset, touch_counts)
                 region_states.remove(state)
 
 
 def draw_frame(frame, detections, regions, states, touch_counts):
     zone_colors = {}
-    for name, points in regions:
+    for name, points, _offset in regions:
         region_states = states.get(name, [])
         if any(state.status == COUNTING for state in region_states):
             zone_colors[name] = (0, 0, 255)
@@ -248,7 +255,7 @@ def draw_frame(frame, detections, regions, states, touch_counts):
         cv2.polylines(frame, [polygon], True, zone_colors[name], 2)
         x, y = polygon[0]
         label_y = max(20, int(y) - 8)
-        region_label = name.replace("_", " ").title()
+        region_label = name
         cv2.putText(frame, region_label, (int(x), label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, zone_colors[name], 2)
         cv2.putText(frame, f"Count: {touch_counts.get(name, 0)}", (int(x), label_y + 22), cv2.FONT_HERSHEY_SIMPLEX, 0.55, zone_colors[name], 2)
 
@@ -339,7 +346,7 @@ def main():
     try:
         video_writer = None
         states = {}
-        touch_counts = {name: 0 for name, _points in regions}
+        touch_counts = {name: 0.0 for name, _points, _offset in regions}
         frame_index = -1
         processing_started = time.perf_counter()
         while True:
@@ -377,7 +384,8 @@ def main():
         for region_states in states.values():
             for state in region_states:
                 if state.status == COUNTING:
-                    close_visit(state, final_frame, final_seconds, writer)
+                    region_offset = next(offset for name, _points, offset in regions if name == state.region)
+                    close_visit(state, final_frame, final_seconds, writer, region_offset, touch_counts)
         if video_writer is not None:
             video_writer.release()
     finally:

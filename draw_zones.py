@@ -112,7 +112,8 @@ def main():
             if right - left >= 2 and bottom - top >= 2:
                 index = len(zones) + 1
                 zones.append({
-                    "name": f"region_{chr(64 + index) if index <= 26 else index}",
+                    "name": f"region_{index}",
+                    "offset": 1.0,
                     "points": [[left, top], [right, top], [right, bottom], [left, bottom]],
                 })
             start = None

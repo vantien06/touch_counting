@@ -13,7 +13,9 @@ python gui.py
 
 Để chạy nhanh trên Windows, double-click `run_touch_counting.bat`. Khi copy project sang máy khác, chạy `create_desktop_shortcut.bat` một lần trên máy đó để tạo shortcut mới ngoài Desktop; không copy file `.lnk` từ máy cũ vì shortcut Windows chứa đường dẫn tuyệt đối. CSV mặc định được ghi vào Desktop của máy đang chạy.
 
-Trong GUI, chọn camera, bấm `Refresh` sau khi cắm/tháo thiết bị, chọn config và CSV, bấm `Vẽ / sửa zone`, kéo chuột để tạo vùng rồi bấm `s` để lưu. Sau đó bấm `Bắt đầu tracking`. Phím `q` hoặc `Esc` trong preview dừng tracking. Mặc định model sẽ được Ultralytics tải khi chạy lần đầu; có thể đổi tên model trong `config.yaml`.
+Trong GUI, chọn camera, bấm `Refresh` sau khi cắm/tháo thiết bị, chọn config và CSV, bấm `Vẽ / sửa zone`, kéo chuột để tạo vùng rồi bấm `s` để lưu. Bảng `Zone settings` hiển thị sau khi chọn camera; nhập tên riêng cho từng zone và `Offset (touches/min)`, sau đó bấm `Start tracking` để lưu. Nếu vừa tạo zone mới, bấm `Reload zones` trước khi nhập tên và offset. Phím `q` hoặc `Esc` trong preview dừng tracking. Mặc định model sẽ được Ultralytics tải khi chạy lần đầu; có thể đổi tên model trong `config.yaml`.
+
+Touch của mỗi visit được tính theo công thức `thời gian ở trong zone (phút) × offset`. Ví dụ ở trong zone 2 phút với offset 30 lần/phút sẽ ghi nhận 60 touch. Cấu hình cũ không có `offset` sẽ dùng mặc định 1 lần/phút.
 
 ## CLI tương thích
 
@@ -29,6 +31,6 @@ python main.py --video rtsp://user:password@host/stream --preview
 
 ## CSV và xử lý lỗi
 
-`events.csv` dùng UTF-8 và có tên camera custom đã lưu trong GUI, cùng các cột `camera`, `camera_resolution`, `recorded_at_utc`, `zone`, `entry_frame`, `exit_frame`, `entry_time_seconds`, `exit_time_seconds`, `time_in_zone_seconds`. `person_id` không được ghi vì ID tracking có thể thay đổi giữa các frame. Visit chưa đạt dwell không được ghi; visit hợp lệ được ghi ngay khi đóng hoặc khi chương trình dừng.
+`events.csv` dùng UTF-8 và có tên camera custom đã lưu trong GUI, cùng các cột `camera`, `camera_resolution`, `recorded_at_utc`, `zone`, `entry_frame`, `exit_frame`, `entry_time_seconds`, `exit_time_seconds`, `time_in_zone_seconds`, `touch_count`. `person_id` không được ghi vì ID tracking có thể thay đổi giữa các frame. Visit chưa đạt dwell không được ghi; visit hợp lệ được ghi ngay khi đóng hoặc khi chương trình dừng.
 
 Nếu không thấy camera, bấm `Refresh`, thử đổi cổng USB và đóng Zoom/Teams/Camera. Nếu preview không hiện, kiểm tra OpenCV GUI và chạy lại với `--preview`. Model lớn sẽ chậm hơn; dùng model nhỏ hoặc giảm `imgsz` trong YAML. Lỗi import dependency được xử lý bằng `pip install -r requirements.txt` trong đúng environment `touchCounting`.

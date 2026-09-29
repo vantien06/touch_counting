@@ -82,8 +82,18 @@ class TouchCountingApp:
         self.preview_after_id = None
         self.load_settings()
 
-        main = ttk.Frame(root, padding=18)
-        main.pack(fill="both", expand=True)
+        scroll_container = ttk.Frame(root)
+        scroll_container.pack(fill="both", expand=True)
+        self.scroll_canvas = tk.Canvas(scroll_container, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(scroll_container, orient="vertical", command=self.scroll_canvas.yview)
+        self.scroll_canvas.configure(yscrollcommand=scrollbar.set)
+        self.scroll_canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        main = ttk.Frame(self.scroll_canvas, padding=18)
+        content_window = self.scroll_canvas.create_window((0, 0), window=main, anchor="nw")
+        main.bind("<Configure>", lambda _event: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
+        self.scroll_canvas.bind("<Configure>", lambda event: self.scroll_canvas.itemconfigure(content_window, width=event.width))
+        self.scroll_canvas.bind_all("<MouseWheel>", self.scroll_with_mouse)
         title_row = ttk.Frame(main)
         title_row.pack(anchor="w")
         if self.header_logo_image is not None:
@@ -126,6 +136,18 @@ class TouchCountingApp:
         self.add_setting_row(settings, 3, "Zone time (sec)", self.dwell_var, help_text="How long a person must remain in a zone before one visit is counted.")
         self.add_setting_row(settings, 4, "Lost ID grace (sec)", self.grace_var, help_text="How long to keep a visit when the camera temporarily loses the person.")
         self.add_setting_row(settings, 5, "ID recovery (px)", self.handoff_var, help_text="Maximum distance for matching a newly detected person to the previous position after an ID change.")
+
+        self.zone_settings = ttk.LabelFrame(main, text="Zone settings", padding=10)
+        self.zone_settings.pack(fill="x", pady=(5, 5))
+        self.zone_settings.columnconfigure(1, weight=1)
+        self.zone_settings.columnconfigure(3, weight=1)
+        ttk.Label(self.zone_settings, text="Zone").grid(row=0, column=0, sticky="w", padx=(0, 10))
+        ttk.Label(self.zone_settings, text="Name").grid(row=0, column=1, sticky="w", padx=(0, 10))
+        ttk.Label(self.zone_settings, text="Offset (touches/min)").grid(row=0, column=2, sticky="w", padx=(0, 10))
+        self.zone_rows = []
+        self.zone_status_var = tk.StringVar(value="No zones configured")
+        ttk.Label(self.zone_settings, textvariable=self.zone_status_var).grid(row=1, column=0, columnspan=4, sticky="w")
+        ttk.Button(self.zone_settings, text="Reload zones", command=self.reload_zone_settings).grid(row=0, column=4, padx=(8, 0))
 
         output_row = ttk.Frame(main)
         output_row.pack(fill="x", pady=(8, 5))
@@ -173,6 +195,10 @@ class TouchCountingApp:
             self.camera_var.set("")
             self.preview_label.configure(text="No preview available", image="")
             self.status_var.set("No camera found")
+
+    def scroll_with_mouse(self, event):
+        if self.scroll_canvas.winfo_exists():
+            self.scroll_canvas.yview_scroll(int(-event.delta / 120), "units")
 
     def update_camera_preview(self, _event=None):
         self.stop_camera_preview()
@@ -250,8 +276,37 @@ class TouchCountingApp:
             self.dwell_var.set(str(config.get("dwell_seconds", self.dwell_var.get())))
             self.grace_var.set(str(config.get("id_switch_grace_seconds", self.grace_var.get())))
             self.handoff_var.set(str(config.get("id_switch_distance_pixels", self.handoff_var.get())))
+            self.load_zone_settings(config.get("regions", []))
         except (OSError, yaml.YAMLError):
             return
+
+    def load_zone_settings(self, regions):
+        for row in self.zone_rows:
+            row["frame"].destroy()
+        self.zone_rows = []
+        valid_regions = [region for region in regions if isinstance(region, dict)]
+        self.zone_status_var.set(f"{len(valid_regions)} zone(s) configured" if valid_regions else "No zones configured")
+        for index, region in enumerate(valid_regions, start=1):
+            row_frame = ttk.Frame(self.zone_settings)
+            row_frame.grid(row=index, column=0, columnspan=5, sticky="ew", pady=2)
+            name_var = tk.StringVar(value=str(region.get("name", f"region_{index}")))
+            offset_var = tk.StringVar(value=str(region.get("offset", 1.0)))
+            ttk.Label(row_frame, text=f"Zone {index}", width=10).pack(side="left", padx=(0, 10))
+            ttk.Entry(row_frame, textvariable=name_var).pack(side="left", fill="x", expand=True, padx=(0, 10))
+            ttk.Entry(row_frame, textvariable=offset_var, width=18).pack(side="left")
+            self.zone_rows.append({"frame": row_frame, "region": region, "name": name_var, "offset": offset_var})
+
+    def reload_zone_settings(self):
+        camera = self.selected_camera_info()
+        if camera is None:
+            return
+        config_path = self.ensure_camera_config(camera)
+        try:
+            with config_path.open("r", encoding="utf-8") as stream:
+                config = yaml.safe_load(stream) or {}
+            self.load_zone_settings(config.get("regions", []))
+        except (OSError, yaml.YAMLError):
+            messagebox.showerror("Could not load zones", "The zone settings could not be loaded.")
 
     def read_camera_name(self, camera):
         config_path = self.camera_config_path(camera)
@@ -332,6 +387,16 @@ class TouchCountingApp:
             config_path = self.ensure_camera_config(camera)
             with config_path.open("r", encoding="utf-8") as stream:
                 config = yaml.safe_load(stream) or {}
+            regions = config.get("regions", [])
+            if len(regions) != len(self.zone_rows):
+                self.load_zone_settings(regions)
+            for row, region in zip(self.zone_rows, regions):
+                name = row["name"].get().strip()
+                offset = float(row["offset"].get())
+                if not name or offset < 0:
+                    raise ValueError
+                region["name"] = name
+                region["offset"] = offset
             config.update({
                 "camera_name": self.camera_name_var.get().strip(),
                 "model": MODEL_FILES.get(self.model_var.get(), self.model_var.get()),
@@ -340,6 +405,7 @@ class TouchCountingApp:
                 "dwell_seconds": dwell,
                 "id_switch_grace_seconds": grace,
                 "id_switch_distance_pixels": handoff,
+                "regions": regions,
             })
             with config_path.open("w", encoding="utf-8") as stream:
                 yaml.safe_dump(config, stream, sort_keys=False)
@@ -445,6 +511,7 @@ class TouchCountingApp:
     def close(self):
         self.stop_tracking()
         self.stop_camera_preview()
+        self.scroll_canvas.unbind_all("<MouseWheel>")
         self.root.destroy()
 
 

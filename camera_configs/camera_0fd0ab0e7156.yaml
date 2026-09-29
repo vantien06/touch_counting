@@ -1,4 +1,4 @@
-model: yolo26n.pt
+model: yolo26s.pt
 confidence: 0.25
 imgsz: 640
 tracker: bytetrack.yaml
@@ -6,7 +6,7 @@ dwell_seconds: 5.0
 id_switch_grace_seconds: 1.0
 id_switch_distance_pixels: 120.0
 regions:
-- name: region_A
+- name: Maggi
   points:
   - - 64
     - 501
@@ -16,7 +16,8 @@ regions:
     - 899
   - - 64
     - 899
-- name: region_B
+  offset: 200.0
+- name: PSC
   points:
   - - 624
     - 577
@@ -26,7 +27,8 @@ regions:
     - 693
   - - 624
     - 693
-- name: region_C
+  offset: 1.0
+- name: 3in1
   points:
   - - 1622
     - 642
@@ -36,7 +38,8 @@ regions:
     - 844
   - - 1622
     - 844
-- name: region_D
+  offset: 1.0
+- name: milo
   points:
   - - 1338
     - 387
@@ -46,4 +49,16 @@ regions:
     - 560
   - - 1338
     - 560
+  offset: 1.0
+- name: Nescafe
+  offset: 1.0
+  points:
+  - - 345
+    - 149
+  - - 785
+    - 149
+  - - 785
+    - 297
+  - - 345
+    - 297
 camera_name: Camera Laptop
